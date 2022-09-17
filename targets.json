@@ -1,0 +1,13 @@
+{
+    "10m_AP_ISSF": {
+        "ten": 11.5,
+        "quotient": 16,
+        "inner_ten": 5,
+        "inner_ten_measuring_ring": 9,
+        "inner_ten_measuring_edge": 18,
+        "black": [7, 10],
+        "ring_thickness": 0.1,
+        "numbers": [1, 8],
+        "card_size": [170, 170]
+    }
+}
