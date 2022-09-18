@@ -1,5 +1,9 @@
 # test
-test.py
+test*.py
+*output.csv
 
 # development
 venv
+
+# other
+__pycache__
