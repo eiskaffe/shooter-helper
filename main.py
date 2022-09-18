@@ -37,7 +37,7 @@ def getValue(hyp, ring_fraction):
 def innerTen(hyp, rings):
     if hyp + MEASURING_EDGE / 2 <= rings[MEASURING_RING]: return True
     else: return False
-    
+        
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Meyton shot calculator and visualizer from coordinates")
     parser.add_argument("inputfile", help="sets the input file. Format delimited to .csv")
@@ -100,27 +100,31 @@ def main(argv=None):
     logger.info(f"OUTPUT FILE: {outputname}")
     with alive_bar(number_of_lines) as bar:
         # id    date    x   y   value   hypotenuse  angle
-        # 0     1       2   3   4       5           6
+        # 0     1       2   3   4       (5)         (6)
         with open(args.inputfile, "r") as inputfile:
             with open(outputname, "a") as outputfile:
                 csvreader = csv.reader(inputfile, delimiter=CSV_DELIMETER)
                 for row in csvreader:
                     logger.debug(f"---NEW SHOT ID: {row[0]}---")
+                    if row[2] == "" or row[3] == "": 
+                        print(row)
+                        logger.warning(f"SHOT ID {row[0]} has incomplete coordinates (X:{'None' if row[2] == '' else row[2]};Y:{'None' if row[3] == '' else row[3]})")
+                        outputfile.write(CSV_DELIMETER.join(map(str, (row[0], row[1], "" if row[2] == "" else row[2], "" if row[3] == "" else row[3], "" if row[4] == "" else row[4]))) + "\n")
+                    else:
+                        hyp = getHypotenuse(row[2], row[3])
+                        logger.debug(f"hypotenuse: {hyp}")
                     
-                    hyp = getHypotenuse(row[2], row[3])
-                    logger.debug(f"hypotenuse: {hyp}")
-                
-                    angle = getAngle(row[2], row[3])
-                    logger.debug(f"angle: {angle}")
+                        angle = getAngle(row[2], row[3])
+                        logger.debug(f"angle: {angle}")
 
-                    value = getValue(hyp, target_data["ring_fraction"])
-                    logger.debug(f"value: {value}")
+                        value = getValue(hyp, target_data["ring_fraction"])
+                        logger.debug(f"value: {value}")
+                        
+                        if logger.level == 10:
+                            if value == float(row[4].replace(",", ".")): logger.debug("TRUE: given value MATCHES the generated value")
+                            else: logger.debug(f"FALSE ({value} != {row[4].replace(',', '.')}): given value DOESN'T MATCH the generated value")
                     
-                    outputfile.write(CSV_DELIMETER.join(map(str, (row[0], row[1], row[2], row[3], value, hyp, angle))) + "\n")
-                    
-                    if logger.level == 10:
-                        if value == float(row[4].replace(",", ".")): logger.debug("TRUE: given value MATCHES the generated value")
-                        else: logger.debug(f"FALSE ({value} != {row[4].replace(',', '.')}): given value DOESN'T MATCH the generated value")
+                        outputfile.write(CSV_DELIMETER.join(map(str, (row[0], row[1], row[2], row[3], value, hyp, angle))) + "\n")
 
                     bar()
 
