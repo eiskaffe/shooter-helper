@@ -4,6 +4,7 @@ from math import sqrt, atan, degrees
 import json
 import logging
 import os
+from alive_progress import alive_bar
 
 def getHypotenuse(x, y):
     return sqrt(int(x) ** 2 + int(y) ** 2)
@@ -92,31 +93,36 @@ def main(argv=None):
     MEASURING_EDGE = target_data["inner_ten_measuring_edge"]
     MEASURING_RING = target_data["inner_ten_measuring_ring"]
 
-    # id    date    x   y   value   hypotenuse  angle
-    # 0     1       2   3   4       5           6
-    with open(args.inputfile, newline='') as inputfile:
-        with open(outputname, "a") as outputfile:
-            logger.info(f"INPUT FILE: {args.inputfile}")
-            logger.info(f"OUTPUT FILE: {outputname}")
-            csvreader = csv.reader(inputfile, delimiter=CSV_DELIMETER)
-            for row in csvreader:
-                logger.debug(f"---NEW SHOT ID: {row[0]}---")
+    logger.info("Initializing...")
+    lines_in_file = open(args.inputfile, 'r').readlines()
+    number_of_lines = len(lines_in_file)
+    logger.info(f"INPUT FILE: {args.inputfile}")
+    logger.info(f"OUTPUT FILE: {outputname}")
+    with alive_bar(number_of_lines) as bar:
+        # id    date    x   y   value   hypotenuse  angle
+        # 0     1       2   3   4       5           6
+        with open(args.inputfile, "r") as inputfile:
+            with open(outputname, "a") as outputfile:
+                csvreader = csv.reader(inputfile, delimiter=CSV_DELIMETER)
+                for row in csvreader:
+                    logger.debug(f"---NEW SHOT ID: {row[0]}---")
+                    
+                    hyp = getHypotenuse(row[2], row[3])
+                    logger.debug(f"hypotenuse: {hyp}")
                 
-                hyp = getHypotenuse(row[2], row[3])
-                logger.debug(f"hypotenuse: {hyp}")
-            
-                angle = getAngle(row[2], row[3])
-                logger.debug(f"angle: {angle}")
+                    angle = getAngle(row[2], row[3])
+                    logger.debug(f"angle: {angle}")
 
-                value = getValue(hyp, target_data["ring_fraction"])
-                logger.debug(f"value: {value}")
-                
-                outputfile.write(CSV_DELIMETER.join(map(str, (row[0], row[1], row[2], row[3], value, hyp, angle))) + "\n")
-                
-                if logger.level == 10:
-                    if value == float(row[4].replace(",", ".")): logger.debug("TRUE: given value MATCHES the generated value")
-                    else: logger.debug(f"FALSE ({value} != {row[4].replace(',', '.')}): given value DOESN'T MATCH the generated value")
-            
+                    value = getValue(hyp, target_data["ring_fraction"])
+                    logger.debug(f"value: {value}")
+                    
+                    outputfile.write(CSV_DELIMETER.join(map(str, (row[0], row[1], row[2], row[3], value, hyp, angle))) + "\n")
+                    
+                    if logger.level == 10:
+                        if value == float(row[4].replace(",", ".")): logger.debug("TRUE: given value MATCHES the generated value")
+                        else: logger.debug(f"FALSE ({value} != {row[4].replace(',', '.')}): given value DOESN'T MATCH the generated value")
+
+                    bar()
 
 if __name__ == "__main__":
     main()
