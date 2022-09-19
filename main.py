@@ -1,10 +1,18 @@
-import csv
-import argparse
+# Math
 from math import sqrt, atan, degrees
+# Image processing
+import imglib
+import cv2
+import pytesseract
+from pytesseract import Output
+# Data management
 import json
+import csv
+# Other
 import logging
 import os
 from alive_progress import alive_bar
+import argparse
 
 def getHypotenuse(x, y):
     return sqrt(int(x) ** 2 + int(y) ** 2)
@@ -37,8 +45,56 @@ def getValue(hyp, ring_fraction):
 def innerTen(hyp, rings):
     if hyp + MEASURING_EDGE / 2 <= rings[MEASURING_RING]: return True
     else: return False
+
+def longestStringIn2DList(inputlist):
+    """assuming all rows have the same amount of data"""
+    columns = len(inputlist[0])
+    column_length = [0 for _ in range(columns)]
+    for row in inputlist:
+        for i, value in enumerate(row):
+            if len(value) > column_length[i]: column_length[i] = len(value)
+    return column_length
+
+def printTable(list2d, head:list=[[]], style="|-+", firstlinehead=True):
+    # STYLE: 0: vertical, 1: horizontal, 2: intersection
+    column_length = longestStringIn2DList(list2d + head)
+    style = [*style]
+    splitter = style[2]
+    for value in column_length:
+        splitter = f"{splitter}{style[1]*(value + 2)}{style[2]}"
+    print(splitter)
         
+    if head != [[]]:
+        print_row = style[0]
+        for column, max_length in zip(head[0], column_length):
+            print_row = f"{print_row} {column.upper()}{' '*(max_length - len(column) + 1)}{style[0]}"
+        print(print_row)
+        print(splitter)
+        
+    for row in list2d:
+        print_row = style[0]
+        for column, max_length in zip(row, column_length):
+            print_row = f"{print_row} {column}{' '*(max_length - len(column) + 1)}{style[0]}"
+        print(print_row)
+    print(splitter)
+    
+     
+def imageParser(img_path, allowed_characters="-0123456789", config = r"--psm 1"):
+    if os.path.exists(img_path) is False: raise FileNotFoundError(f"Given image file ({img_path}) does not exist.")
+    img = cv2.imread(img_path)
+    img = imglib.noiseRemoval(img)
+    img = imglib.deskew(img)
+    img = imglib.grayscale(img)
+    thresh, img = cv2.threshold(img, 100, 300, cv2.THRESH_BINARY)
+    img = imglib.thickFont(img)
+    data = pytesseract.image_to_data(img, config=config, output_type=Output.DICT)
+    logging.debug(f"IMAGE ({img_path}: {data}")
+    
+       
 def main(argv=None):
+    
+    
+    
     parser = argparse.ArgumentParser(description="Meyton shot calculator and visualizer from coordinates")
     parser.add_argument("inputfile", help="sets the input file. Format delimited to .csv")
     parser.add_argument("--output", "-o", default=None, help="sets the output file, defaults to <inputfile>_output.csv. Format delimited to .csv")

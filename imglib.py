@@ -49,7 +49,7 @@ def getSkewAngle(cvImage) -> float:
 
     # Find largest contour and surround in min area box
     largestContour = contours[0]
-    print (len(contours))
+    # print (len(contours))
     minAreaRect = cv2.minAreaRect(largestContour)
     cv2.imwrite("temp/boxes.jpg", newImage)
     # Determine the angle. Convert it to the value that was originally used to obtain skewed image
