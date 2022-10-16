@@ -1,2 +1,5 @@
 alive-progress
 numpy
+pytesseract
+opencv-python
+pillow

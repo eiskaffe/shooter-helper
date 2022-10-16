@@ -3,11 +3,12 @@
         "ten": 11.5,
         "quotient": 16,
         "inner_ten": 5,
+        "inner_ten_shown": true,
         "inner_ten_measuring_ring": 9,
         "inner_ten_measuring_edge": 18,
-        "black": [7, 10],
+        "black": 7,
         "ring_thickness": 0.1,
-        "numbers": [1, 8],
+        "numbers": [9, 1],
         "card_size": [170, 170]
     }
 }

@@ -4,7 +4,7 @@ import PIL.Image
 import cv2
 import numpy as np
 
-def noiseRemoval(image, iterations=5):
+def noiseRemoval(image, iterations=30):
     kernel = np.ones((1, 1), np.uint8)
     image = cv2.dilate(image, kernel, iterations=iterations)
     kernel = np.ones((1, 1), np.uint8)
@@ -13,7 +13,7 @@ def noiseRemoval(image, iterations=5):
     image = cv2.medianBlur(image, 3)
     return image
 
-def thickFont(image, iterations=5):
+def thickFont(image, iterations=2):
     image = cv2.bitwise_not(image)
     kernel = np.ones((2, 2), np.uint8)
     image = cv2.dilate(image, kernel, iterations=iterations)
@@ -22,7 +22,7 @@ def thickFont(image, iterations=5):
 
 def grayscale(image, a=100, b=300):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    thresh, image = cv2.threshold(image, 100, 300, cv2.THRESH_BINARY)
+    thresh, image = cv2.threshold(image, a, b, cv2.THRESH_BINARY)
     return image
 
 #https://becominghuman.ai/how-to-automatically-deskew-straighten-a-text-image-using-opencv-a0c30aed83df
