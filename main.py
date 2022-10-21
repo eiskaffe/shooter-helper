@@ -1,6 +1,6 @@
 # Math
-from email.mime import base
-from math import sqrt, atan, degrees, floor
+from math import sqrt, atan, degrees, floor, dist
+from statistics import median, mean
 import numpy as np
 # Image processing
 import imglibrary
@@ -14,6 +14,8 @@ import csv
 import logging
 import os
 from alive_progress import alive_bar
+from typing import List
+from dataclasses import dataclass, field
 import argparse
 import datetime
 
@@ -22,14 +24,13 @@ VERSION = 0.1
 VERSION_TYPE = "development"
 AUTHOR = "eiskaffe"
 
-def getHypotenuse(x, y):
-    return sqrt(int(x) ** 2 + int(y) ** 2)
+def get_hypotenuse(x: int, y: int) -> int:
+    """Returns the hypotenuse of a shot given by its x and y coordinates"""
+    return sqrt(x ** 2 + y ** 2)
 
-def getAngle(x, y):
-    x = int(x)
-    y = int(y)
-    
-    q = None
+def get_angle(x: int, y: int) -> float:
+    """Returns the angle of a shot given by its x and y coordinates"""
+    q: int = None
     if x > 0 and y >= 0: q = 1
     elif x <= 0 and y > 0: q = 2
     elif x < 0 and y <= 0: q = 3
@@ -43,61 +44,67 @@ def getAngle(x, y):
         if q == 1: return deg
         else: return (q * 90) - deg
 
-def getValue(hyp, ring_fraction):
-    distance = hyp / RATIO
-    if innerTen(distance, ring_fraction) is False: distance = distance - CALIBER / 2
-    for key, item in ring_fraction.items():
+def get_value(hypotenuse: int) -> List[int | None]:
+    """Returns the value of a shot given by the shot's hypotenuse and its target's ring_fraction"""
+    distance = hypotenuse / RATIO
+    if inner_ten(distance) is False: distance = distance - CALIBER / 2
+    for key, item in RING_FRACTION.items():
         if distance <= item: return key
     return None
 
-def innerTen(hyp, rings):
-    if hyp + MEASURING_EDGE / 2 <= rings[MEASURING_RING]: return True
+def inner_ten(hypotenuse: int) -> bool:
+    """Returns a true if the shot is a inner ten. If not returns False"""
+    if hypotenuse + MEASURING_EDGE / 2 <= RINGS[MEASURING_RING]: return True
     else: return False
 
-def longestStringIn2DList(inputlist):
-    # assuming all rows are the same length
-    columns = len(inputlist[0])
+def longest_string_in_matrix(matrix: list[list]) -> list[int]:
+    """Returns the longest element in a 2D list or matrix in each column"""
+    columns = len(matrix[0])
     column_length = [0 for _ in range(columns)]
-    for row in inputlist:
+    for row in matrix:
         for i, value in enumerate(row):
-            if len(value) > column_length[i]: column_length[i] = len(value)
+            if len(str(value)) > column_length[i]: column_length[i] = len(str(value))
     return column_length
 
-def printTable(list2d:list[list], head:list=[], style="|-+", firstlinehead=True):
-    # STYLE: 0: vertical, 1: horizontal, 2: intersection
+def printTable(matrix:list[list[str]], head:list=[str], style="|-+") -> None:
+    """Prints out a table to the stdout from a matrix whose inner lists' length are all equal\n
+    STYLE: 0: vertical, 1: horizontal, 2: intersection"""
     head = [head]
-    column_length = longestStringIn2DList(list2d + head)
-    style = [*style]
-    splitter = style[2]
+    column_length = longest_string_in_matrix(matrix + head)
+    vertical, horizontal, intersection = [*style]
     for value in column_length:
-        splitter = f"{splitter}{style[1]*(value + 2)}{style[2]}"
-    print(splitter)
+        intersection = f"{intersection}{horizontal*(value + 2)}{style[2]}"
+    print(intersection)
         
     if head != [[]]:
-        print_row = style[0]
+        print_row = vertical
         for column, max_length in zip(head[0], column_length):
-            print_row = f"{print_row} {column.upper()}{' '*(max_length - len(column) + 1)}{style[0]}"
+            print_row = f"{print_row} {column.upper()}{' '*(max_length - len(column) + 1)}{vertical}"
         print(print_row)
-        print(splitter)
+        print(intersection)
         
-    for row in list2d:
-        print_row = style[0]
+    for row in matrix:
+        print_row = vertical
         for column, max_length in zip(row, column_length):
-            print_row = f"{print_row} {column}{' '*(max_length - len(column) + 1)}{style[0]}"
+            print_row = f"{print_row} {column}{' '*(max_length - len(column) + 1)}{vertical}"
         print(print_row)
-    print(splitter)
-    
-def manualTenInsertion():
-    ...
+    print(intersection)
+
+# NotImplemented   
+def manual_ten_insertion():
+    raise NotImplementedError()
      
-def imageParser(img_path, allowed_characters="-0123456789", config = r"--psm 12"):
+def imageParser(img_path: str, allowed_characters: str = "-0123456789", config: str = r"--psm 12"):
     if os.path.exists(img_path) is False: raise FileNotFoundError(f"Given image file ({img_path}) does not exist.")
     img = cv2.imread(img_path)
-    img = imglibrary.noiseRemoval(img)
-    # img = imglibrary.deskew(img)
-    img = imglibrary.grayscale(img)
-    thresh, img = cv2.threshold(img, 100, 300, cv2.THRESH_BINARY)
-    img = imglibrary.thickFont(img, 15)
+    img = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    
+    
+    # img = imglibrary.noiseRemoval(img)
+    # # img = imglibrary.deskew(img)
+    # img = imglibrary.grayscale(img)
+    # thresh, img = cv2.threshold(img, 100, 300, cv2.THRESH_BINARY)
+    # img = imglibrary.thickFont(img, 15)
     data = pytesseract.image_to_data(img, config=config, output_type=Output.DICT)
 
     confidence = [conf for conf in data['conf'] if conf != -1]
@@ -151,25 +158,68 @@ def imageParser(img_path, allowed_characters="-0123456789", config = r"--psm 12"
 
     # return [[final_list[i], final_list[i+1]] for i in range(0, len(final_list), 2)]
 
-def draw(shots, target, font_size = 25):
-    img = np.zeros((target["card_size"][0]*RATIO, target["card_size"][1]*RATIO, 3), np.uint8)
+@dataclass
+class Shot:
+    """Defines a shot"""
+    x: int
+    y: int
+    shot_number: int
+    date: datetime.datetime = field(default_factory=datetime.datetime.now)
+    id: str = field(init=False)
+    hypotenuse: int = field(init=False)
+    angle: float = field(init=False)
+    value: float = field(init=False)
+    
+    def __post_init__(self) -> None:
+        self.id = date_shot_number_combiner(self.date, self.shot_number)
+        self.hypotenuse = get_hypotenuse(self.x, self.y)
+        self.angle = get_angle(self.x, self.y)
+        self.value = get_value(self.hypotenuse)
+
+def mean_median_of_shots(shots: list[Shot]) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+    """
+    Return: tuple[x-mean, y-mean, hyp-mean], tuple[x-median, y-median, hyp-median]
+    """
+    x_list: list[int] = [shot.x for shot in shots]
+    y_list: list[int] = [shot.y for shot in shots]
+    
+    x_mn = int(mean(x_list))
+    y_mn = int(mean(y_list))
+    hyp_mn = int(mean([dist((x, y), (x_mn, y_mn)) for x, y in zip(x_list, y_list)]))
+    
+    x_med = int(median(x_list))
+    y_med = int(median(y_list))
+    hyp_med = int(median([dist((x, y), (x_med, y_med)) for x, y in zip(x_list, y_list)]))
+    
+    return (x_mn, y_mn, hyp_mn), (x_med, y_med, hyp_med)
+
+def get_consistency():
+    ...
+
+def draw(shots: list[Shot], font_size: int = 25, N: int = 12, write: bool = False, show: bool = False, analyze: bool = False) -> None:
+    """Draws the shots to a file
+    
+    N is the image size: 2^N (Default: 2^12 = 2048)
+    
+    """
+    img = np.zeros((TARGET_DATA["card_size"][0]*RATIO, TARGET_DATA["card_size"][1]*RATIO, 3), np.uint8)
     img[::] = (192, 21, 0)
-    center = (target["card_size"][0] // 2 * RATIO, target["card_size"][1] // 2 * RATIO)
+    center = (TARGET_DATA["card_size"][0] // 2 * RATIO, TARGET_DATA["card_size"][1] // 2 * RATIO)
     xmid, ymid = center
-    quotient = int(target["quotient"]*RATIO) // 2
-    ring_thickness = int(target["ring_thickness"]*RATIO)
-    img = cv2.circle(img, center, 0, (255, 255, 255), int(target["rings"][-1]*2*RATIO))
-    img = cv2.circle(img, center, 0, (90, 144, 21), int(target["ring_fraction"][target["black"]]*2*RATIO))
+    quotient = int(TARGET_DATA["quotient"]*RATIO) // 2
+    ring_thickness = int(TARGET_DATA["ring_thickness"]*RATIO)
+    img = cv2.circle(img, center, 0, (255, 255, 255), int(RINGS[-1]*2*RATIO))
+    img = cv2.circle(img, center, 0, (90, 144, 21), int(RING_FRACTION[TARGET_DATA["black"]]*2*RATIO))
     if logger.level == 10:
         img = cv2.circle(img, center, 0, (0, 0, 255), 200)
-        img = cv2.line(img, (xmid, 0), (xmid, target["card_size"][1]*RATIO), (0, 0, 255), 50)
-        img = cv2.line(img, (0, ymid), (target["card_size"][0]*RATIO, ymid), (0, 0, 255), 50)
-    for i, radius in enumerate(target["rings"]):
-        if 10 - i < target["black"]: color = (0, 0, 0)
+        img = cv2.line(img, (xmid, 0), (xmid, TARGET_DATA["card_size"][1]*RATIO), (0, 0, 255), 50)
+        img = cv2.line(img, (0, ymid), (TARGET_DATA["card_size"][0]*RATIO, ymid), (0, 0, 255), 50)
+    for i, radius in enumerate(RINGS):
+        if 10 - i < TARGET_DATA["black"]: color = (0, 0, 0)
         else: color = (235, 235, 235)
         img = cv2.circle(img, center, int(radius*RATIO), color, ring_thickness)
         
-        if 10 - i <= target["numbers"][0] and 10 - i >= target["numbers"][1]:
+        if 10 - i <= TARGET_DATA["numbers"][0] and 10 - i >= TARGET_DATA["numbers"][1]:
             (label_width, label_height), baseline = cv2.getTextSize(str(10-i), cv2.FONT_HERSHEY_PLAIN, font_size, font_size*2)
             
             img = cv2.putText(img, str(10-i), (xmid - font_size*RATIO//20, ymid - i*quotient), cv2.FONT_HERSHEY_PLAIN, font_size, color, font_size*2)
@@ -178,27 +228,35 @@ def draw(shots, target, font_size = 25):
             img = cv2.putText(img, str(10-i), (xmid - i*quotient - label_width + label_width//8, ymid + font_size*RATIO//20), cv2.FONT_HERSHEY_PLAIN, font_size, color, font_size*2)
             img = cv2.putText(img, str(10-i), (xmid + i*quotient, ymid + font_size*RATIO//20), cv2.FONT_HERSHEY_PLAIN, font_size, color, font_size*2)
         
-    for shot in shots:
-        x = int(shot[2])
-        y = int(shot[3])
-        xmid = x + target["card_size"][0]//2*RATIO if x >= 0 else target["card_size"][0]//2*RATIO - abs(x)
-        ymid = target["card_size"][0]//2*RATIO - y if y >= 0 else abs(y) + target["card_size"][0]//2*RATIO
+    for i, shot in enumerate(shots):
+        xmid = shot.x + TARGET_DATA["card_size"][0]//2*RATIO if shot.x >= 0 else TARGET_DATA["card_size"][0]//2*RATIO - abs(shot.x)
+        ymid = TARGET_DATA["card_size"][0]//2*RATIO - shot.y if shot.y >= 0 else abs(shot.y) + TARGET_DATA["card_size"][0]//2*RATIO
         img = cv2.circle(img, (xmid, ymid), 0, (0, 0, 0), int(CALIBER*RATIO))
-        img = cv2.circle(img, (xmid, ymid), int(CALIBER*RATIO)//2, (255, 255, 255), int(target["ring_thickness"]*RATIO))
+        img = cv2.circle(img, (xmid, ymid), int(CALIBER*RATIO)//2, (255, 255, 255), int(TARGET_DATA["ring_thickness"]*RATIO))
+        (label_width, label_height), baseline = cv2.getTextSize(str(i + 1), cv2.FONT_HERSHEY_PLAIN, font_size//1.4, int(font_size*1.2))
+        img = cv2.putText(img, str(i + 1), (xmid - label_width//2, ymid + label_height//2), cv2.FONT_HERSHEY_PLAIN, font_size//1.4, (0, 255, 255), int(font_size*1.2))
     
+    if analyze:
+        xmid, ymid = center
+        (x_mn, y_mn, mn), (x_med, y_med, med) = mean_median_of_shots(shots)
+        print(mean_median_of_shots(shots))
+        img = cv2.circle(img, (x_mn + xmid, y_mn + ymid), mn, (255, 119, 51), 50)
+        img = cv2.circle(img, (x_med + xmid, y_med + ymid), med, (255, 0, 212), 50)
     
-    
-    
-    
-    
-    cv2.namedWindow("img", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("img", 1000, 1000)
-    cv2.imshow("img", img)
-    cv2.waitKey(0)
-    
+    img = cv2.resize(img, (2 ** N, 2 ** N))
+    if write:
+        cv2.imwrite(f"{datetime.datetime.now().strftime('%Y%m%d')}.jpg", img) 
+    if show:
+        cv2.namedWindow("img", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("img", 1024, 1024)
+        cv2.imshow("img", img)
+        cv2.waitKey(0) 
     
 def evaluateDay(lst):
     ...
+    
+def date_shot_number_combiner(date: datetime.datetime, shot_number: int) -> str:
+    return f"{date.strftime('%y%m%d')}_{shot_number}"
     
 # SUB-COMMANDS
 def imageSubCommand():
@@ -234,13 +292,20 @@ def imageSubCommand():
 def daySubCommand():
     with open(args.csvfile, "r") as infile:
         csvreader = csv.reader(infile, delimiter=CSV_DELIMETER)
-        # implementing linear search
         # id    date    x   y   value   hypotenuse  angle
         # 0     1       2   3   4       (5)         (6)
-        shots = [row for row in csvreader if row[1] == args.date]
-    
-    print(shots)
-    draw(shots, target_data)
+        shots = [Shot(x=int(shot[2]), 
+                      y=int(shot[3]), 
+                      shot_number=int(shot[0].split("_")[1]), 
+                      date=datetime.datetime(
+                        year=int(shot[1].split(".")[0]),
+                        month=int(shot[1].split(".")[1]),
+                        day=int(shot[1].split(".")[2])
+                      ))
+                 for shot in csvreader
+                 if shot[1] == args.date
+                 ]
+    draw(shots, write=True, analyze=True)
                 
             
     
@@ -262,9 +327,9 @@ def main(argv=None):
     qvd_parser.add_argument("--verbose", "-v", action="store_true", help="Shows the programs actions, warnings, errors and exceptions")
     qvd_parser.add_argument("--debug", action="store_true", help="Shows everything the program does. Only recommended for developers")
     parent_parser.add_argument("--log", default=None, help="Set the logging output, defaults to stdout")
+    parent_parser.add_argument("--version", action="version", version=f"shooterhelper {VERSION} {VERSION_TYPE} by {AUTHOR}", help="Shows the version")
     # Other
-    parser = argparse.ArgumentParser(prog="Shooter Helper", description="Meyton shot calculator and visualizer from coordinates")
-    parser.add_argument("--version", action="version", version=f"shooterhelper {VERSION} {VERSION_TYPE} by {AUTHOR}", help="Shows the version")
+    parser = argparse.ArgumentParser(parents=[parent_parser], prog="Shooter Helper", description="Meyton shot calculator and visualizer from coordinates")
 
     # Sub-commands
     subparsers = parser.add_subparsers(help="Sub-commands")
@@ -274,7 +339,7 @@ def main(argv=None):
     img_parser.add_argument("--output", "-o", default=f"{date}-shots.csv", help=f"Sets the output file. File format delimited to csv. Defaults to {date}-shots.csv")
     with open("targets.json", "r") as targets:
             targets_json = json.loads(targets.read())
-            img_parser.add_argument("-t", "--target", choices=targets_json.keys(), help="Sets the target, in which the shots are calculated. If not set the program will not calculate the shots' value (and others)!")
+            img_parser.add_argument("-t", "--target", choices=targets_json.keys(), required=True, help="Sets the target, in which the shots are calculated. (Required)")
     img_parser.add_argument("--disable-errors", action="store_true", help="When this argument is given, the program terminates, and will not try to get user input to solve the issue")
     # img_parser.add_argument("--print-table", "-p", type=bool, default=None) 
     img_parser.set_defaults(func=imageSubCommand)
@@ -286,7 +351,7 @@ def main(argv=None):
     day_parser.add_argument("date", nargs="?", default=datetime.datetime.now().strftime('%Y.%m.%d'), help=f"Set the date to parse, defaults to today's date as ({datetime.datetime.now().strftime('%Y.%m.%d')})")
     with open("targets.json", "r") as targets:
         targets_json = json.loads(targets.read())
-        day_parser.add_argument("-t", "--target", choices=targets_json.keys(), required=True, help="Sets the target, in which the shots are calculated. (Required!)")
+        day_parser.add_argument("-t", "--target", choices=targets_json.keys(), required=True, help="Sets the target, in which the shots are calculated. (Required)")
     day_parser.set_defaults(func=daySubCommand)
     
     # parser.add_argument("inputfile", help="sets the input file. Format delimited to .csv")
@@ -320,26 +385,27 @@ def main(argv=None):
     global CSV_DELIMETER
     CSV_DELIMETER = ";"
     
-    global target_data
-    target_data = []
     if args.target is not None:
-        target_data = targets_json[args.target]
-        logger.debug(f"TARGET DATA: {target_data}")
+        global TARGET_DATA
+        TARGET_DATA = targets_json[args.target]
+        logger.debug(f"TARGET DATA: {TARGET_DATA}")
         del targets_json
-        target_data["rings"] = [(target_data["ten"] + target_data["quotient"] * i) / 2 for i in range(10)]
-        logger.debug(f"RINGS: {target_data['rings']}")
-
-        target_data["ring_fraction"] = {float(f"10.{10 - i - 1}"): (target_data["ten"] / 10 * (i + 1)) / 2 for i in range(10)}
-        target_data["ring_fraction"].update({(100 - i - 1) / 10: (target_data["ten"] + target_data["quotient"] / 10 * (i + 1)) / 2 for i in range(100)})
-        target_data["ring_fraction"].update({key: round(value, 2) for key, value in target_data["ring_fraction"].items()})
         
-        logger.debug(f"RING FRACTION: {target_data['ring_fraction']}")
+        global RINGS
+        RINGS = [(TARGET_DATA["ten"] + TARGET_DATA["quotient"] * i) / 2 for i in range(10)]
+        logger.debug(f"RINGS: {RINGS}")
+
+        global RING_FRACTION
+        RING_FRACTION = {round(float(f"10.{10 - i - 1}"), 2): (TARGET_DATA["ten"] / 10 * (i + 1)) / 2 for i in range(10)}
+        RING_FRACTION.update({(100 - i - 1) / 10: (TARGET_DATA["ten"] + TARGET_DATA["quotient"] / 10 * (i + 1)) / 2 for i in range(100)})
+        logger.debug(f"RING FRACTION: {RING_FRACTION}")
         
         global MEASURING_EDGE, MEASURING_RING
-        MEASURING_EDGE = target_data["inner_ten_measuring_edge"]
-        MEASURING_RING = target_data["inner_ten_measuring_ring"]
-        
+        MEASURING_EDGE = TARGET_DATA["inner_ten_measuring_edge"]
+        MEASURING_RING = TARGET_DATA["inner_ten_measuring_ring"]   
+    
     args.func()
+    
 
     # logger.info("Initializing...")
     # lines_in_file = open(args.inputfile, 'r').readlines()
