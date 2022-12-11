@@ -7,3 +7,4 @@ venv
 
 # other
 __pycache__
+*.code-workspace
