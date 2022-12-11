@@ -1,5 +1,6 @@
 # Math
-from math import degrees, atan, hypot
+from math import degrees, atan, hypot, dist, floor
+from statistics import median, mean
 import numpy as np
 # Data management
 from dataclasses import dataclass, field
@@ -12,11 +13,63 @@ from PIL import Image, ImageTk
 import argparse
 import logging
 import datetime
-from typing import List
+from typing import List, Iterable, Callable
+import os
 
 VERSION = 0.1
 VERSION_TYPE = "development"
 AUTHOR = "eiskaffe"  
+
+@dataclass
+class Shot:
+    """Defines a shot"""
+    x: int
+    y: int
+    id: str
+    date: datetime.datetime = field(default_factory=datetime.datetime.now)
+    hypotenuse: float = None
+    angle: float = None
+    value: float = None
+    shot_number: int = None
+    
+    def __post_init__(self) -> None:
+        self.shot_number = int(self.id.split("_")[1])
+        self.hypotenuse = hypot(self.x, self.y)
+        self.angle = get_angle(self.x, self.y)
+
+    def set_value(self, ratio, ring_fraction) -> None:
+        self.value = get_value(self.hypotenuse, ratio, ring_fraction)
+        
+@dataclass
+class Day:
+    """Defines a day. A day contains N number of Shots"""
+    shots: list[Shot]
+    target_data: dict    
+    date: datetime.datetime = field(default_factory=datetime.datetime.now)
+    summa: tuple[int] = field(init=False)
+    average: tuple[int] = field(init=False)  
+    # abs_consistency: list[int] = field(init=False)
+    # rel_consistency: list[int] = field(init=False)
+    # mean_of_shots: tuple[int] = field(init=False)
+    # median_of_shots: tuple[int] = field(init=False)
+    # shot_distances: list[int] = field(init=False)
+    # number_of_shots: int = field(init=False)
+    
+    def __post_init__(self):
+        self.number_of_shots = len(self.shots)
+         
+        values = [shot.value for shot in self.shots]
+        self.summa = (key_sum(values, key=lambda x: floor(x)), sum(values))
+        self.average = (self.summa[0] / self.number_of_shots, self.summa[1] / self.number_of_shots)
+        
+        # self.shot_distances = get_distances_of_shots(self.shots)
+        # maximal = hypot(TARGET_DATA["card_size"][0]*RATIO, TARGET_DATA["card_size"][1]*RATIO)
+        # self.abs_consistency = [distance / maximal for distance in self.shot_distances]
+        # self.rel_consistency = get_consistency(self.shots)
+ 
+    def draw(self, a = 0, b = -1):
+        if b == -1: b = len(self.shots)
+        raise NotImplementedError()
 
 def get_angle(x: int, y: int) -> float:
     """Returns the angle of a shot given by its x and y coordinates"""
@@ -43,11 +96,12 @@ def get_angle(x: int, y: int) -> float:
     else: 
         return (q * 90) - deg
 
-def get_value(hypotenuse: int) -> List[int | None]:
+def get_value(hypotenuse: int, ratio, ring_fraction) -> List[int | None]:
     """Returns the value of a shot given by the shot's hypotenuse and its target's ring_fraction"""
-    distance = hypotenuse / RATIO
+    distance = hypotenuse / ratio
     # if inner_ten(distance) is False: distance = distance - CALIBER / 2
-    for key, item in RING_FRACTION.items():
+    #TODO Implement binary search
+    for key, item in ring_fraction.items():
         if distance <= item: return key
     return 0
  
@@ -100,26 +154,34 @@ def print_table(matrix: list[list[str]], style="|-+", first_line_head: bool = Tr
         print(print_row)
     print(horizontal_line)
 
-@dataclass
-class Shot:
-    """Defines a shot"""
-    x: int
-    y: int
-    shot_number: int
-    date: datetime.datetime = field(default_factory=datetime.datetime.now)
-    id: str = field(init=False)
-    hypotenuse: int = field(init=False)
-    angle: float = field(init=False)
-    value: float = field(init=False)
+def get_distances_of_shots(shots: list[Shot]) -> list[float]:
+    """Given a N item long list of shots, returns a N-1 item long list
+    of floats of the distances between the shots."""
     
-    def __post_init__(self) -> None:
-        self.id = date_shot_number_combiner(self.date, self.shot_number)
-        self.hypotenuse = hypot(self.x, self.y)
-        self.angle = get_angle(self.x, self.y)
-        
+    x_list: list[int] = [shot.x for shot in shots]
+    y_list: list[int] = [shot.y for shot in shots]
+    
+    return [
+        dist((x_list[i], y_list[i]), (x_list[i+1], y_list[i+1]))
+        for i in range(len(shots)-1)
+        ]
 
-    def set_value(self) -> None:
-        self.value = get_value(self.hypotenuse)
+def get_consistency(shots: list[Shot]) -> tuple[list[float], list[float]]:
+    """Returns relative and absolute constistency"""
+    
+    distances = get_distances_of_shots(shots)
+    maximal = max(distances)
+
+    # Linear Distribution
+    return [distance / maximal for distance in distances]  
+
+def key_sum(A: Iterable, key: Callable) -> float:
+    """A sum function with a key, like in max or min."""
+    summa = 0.0
+    for a in A:
+        summa += key(a)
+    return summa
+        
 
 # TODO
 class App(tk.Tk):
@@ -158,6 +220,20 @@ class App(tk.Tk):
             logger.debug(f"Adding menu target option: {key}")
             target_menu.add_command(label=key.replace("_", " "), command=set_target(key))
 
+def calculate_target(value) -> tuple[dict, dict]:
+    """Returns the ring fraction and the target data, both as dictionaries"""
+    with open("targets.json", "r") as targets:
+        logger.debug(f"Selected value: {value}")
+        targets_json: dict[str: str] = json.loads(targets.read())
+        target_data = targets_json[value]
+        logger.debug(f"{target_data=}")
+    
+    ring_fraction: dict[float: float] = {float(f"10.{10 - i - 1}"): round(((target_data["ten"] / 10 * (i + 1)) / 2), 6) for i in range(10)}
+    ring_fraction.update({(100 - i - 1) / 10: round(((target_data["ten"] + target_data["quotient"] / 10 * (i + 1)) / 2), 6) for i in range(100)})
+    logger.debug(f"{ring_fraction=}")
+    
+    return ring_fraction, target_data      
+        
 def gui() -> None:
     raise NotImplementedError
     app = App()
@@ -165,7 +241,7 @@ def gui() -> None:
 
 def cli() -> None:
     
-    def target_data(*args) -> None:
+    def get_target_data(*args) -> None:
         l = len(args)
         if l == 0:
             print(json.dumps(targets_json[target], indent=2))
@@ -188,19 +264,74 @@ def cli() -> None:
         elif args[0] not in targets_json.keys():
             logger.error(f"No target with name {args[0]} was found")
         else:
-            nonlocal target
+            nonlocal target, ring_fraction, target_data
             target = args[0]
+            ring_fraction, target_data = calculate_target(target)
+    
+    def list_targets(*args) -> None:
+        for key in targets_json:
+            print(key)
+        
+    def read_csv(*args) -> None:
+        if target == None:
+            logger.exception("No target is set!")
+        elif len(args) > 1:
+            logger.exception("set_target only accepts only one positional argument")
+        elif len(args) == 0:
+            logger.exception("set_target requires one positional argument")
+        elif not os.path.exists(args[0]):
+            logger.exception(f"File {args[0]!r} does not exist.")    
+        
+        else:
+            with open(args[0], "r") as csv:
+                nonlocal days
+                days = []
+                current_shots: list[Shot] = []
+                current_day: datetime.datetime = None
+                for shot in csv:
+                    data = shot.strip().split(";")
+                    date = datetime.datetime(*map(int, data[1].split(".")))
+                    s: Shot = None
+                    if len(data) == 4:
+                        s = Shot(int(data[2]), int(data[3]), data[0], date)
+                        s.set_value(ratio, ring_fraction)
+                    else:
+                        s = Shot(int(data[2]), int(data[3]), data[0], date, *map(float, data[4:])) 
+                    logger.debug(s)
+                    
+                    if current_day == None:
+                        current_shots.append(s)
+                        current_day = date
+                    elif current_day == date:
+                        current_shots.append(s)
+                    else:
+                        days.append(Day(current_shots, target_data, current_day))
+                        current_day = date
+                        current_shots = [s]
+                        
+                days.append(Day(current_shots, target_data, current_day)) # Append last day
+                
+            
+          
         
     print(f"Shooterhelper {VERSION} {VERSION_TYPE} by {AUTHOR}\n")
     
-    target = parsed_args.target
-    caliber = parsed_args.caliber
-    ratio = parsed_args.ratio
+    target: str = parsed_args.target
+    caliber: int = parsed_args.caliber
+    ratio: int = parsed_args.ratio
+    csv_file: str = None
+    
+    ring_fraction, target_data = (None, None) if target == None else calculate_target(target)
+    days: list[Day] = []
     
     commands = [
-        ["target_data", "Prints out the specifications of the selected target. If no target is given, details, the currently selected", target_data],
+        ["target_data", "Prints out the specifications of the selected target. If no target is given, details, the currently selected", get_target_data],
         ["set_target", f"Sets target. Choices: [{'; '.join(targets_json.keys())}]", set_target],
-        ["help", "Prints out this", print_help]
+        ["list_targets", "Lists all available targets you can choose from", list_targets],
+        ["read", "Reads the selected csv file and lets you use the data from it.", read_csv],
+        ["help", "Prints out this", print_help],
+        ["exit", "Exits the program", lambda *args: exit()]
+        
     ]
     
     while True:
@@ -215,7 +346,7 @@ def cli() -> None:
                 command[2](*inp[1:])
                 break
         else: # NO BREAK
-            print(f"Error: command {' '.join(inp)} not found!")
+            print(f"Error: command {inp[0]} not found!")
         
         print("\n")
         
