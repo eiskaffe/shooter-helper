@@ -2,6 +2,7 @@
 from math import degrees, atan, hypot, dist, floor
 from statistics import median, mean
 import numpy as np
+import cv2
 # Data management
 from dataclasses import dataclass, field, InitVar
 import json
@@ -25,10 +26,12 @@ class Target:
     name: str
     data: dict
     values: dict[float, float] = field(init=False)
+    int_values: dict[int, int] = field(init=False, repr=False)
     
     def __post_init__(self) -> None:
         self.values = {float(f"10.{10 - i - 1}"): round(((self.data["ten"] / 10 * (i + 1)) / 2), 6) for i in range(10)}
         self.values.update({(100 - i - 1) / 10: round(((self.data["ten"] + self.data["quotient"] / 10 * (i + 1)) / 2), 6) for i in range(100)})
+        self.int_values = {int(key): value for key, value in self.values.items() if key.is_integer()}
         logger.debug(f"{self.name} target initialized with {self.values=}")
 
 @dataclass
@@ -51,7 +54,7 @@ class Shot:
     
     @property
     def hypotenuse(self) -> float:
-        """The distance from the shot"""
+        """The distance of the shot from the center"""
         return hypot(self.x, self.y)
     
     @property
@@ -72,12 +75,15 @@ class Shot:
         if q == 1: return deg
         return (q * 90) - deg
 
-    def get_value(self, target: Target) -> float:
+    def get_value(self, target: Target, integer_only: bool = False) -> float:
         """Returns the corresponding value of a shot based on the target"""
-        # TODO inner ten weird behavior 
-        hypotenuse = self.hypotenuse
-        for value, distance in target.values.items():
-            if hypotenuse <= distance: return value
+        # TODO inner ten weird behavior
+        if integer_only:
+            for value, distance in target.values.items():
+                if self.hypotenuse <= distance: return value
+        else:
+            for value, distance in target.int_values.items():
+                if self.hypotenuse <= distance: return value
         return 0
 
 def load_shots_from_csv(filename: str, ratio: int = 1, sep: str = ";") -> list[Shot]:
@@ -85,7 +91,66 @@ def load_shots_from_csv(filename: str, ratio: int = 1, sep: str = ";") -> list[S
         return [Shot(*line.strip().split(sep))
                 for line in csvfile]
             
-            
+def draw(shots: list[Shot], target: Target, base_image: cv2.Mat = None, ratio: int = 1) -> cv2.Mat:
+    """Draws the shots to a file\n
+    N is the image size in pixels: 2^N (Default: 2^12-1 = 2048)"""
+    
+    img = np.zeros((target.data["card_size"][0]*RATIO, target.data["card_size"][1]*RATIO, 3), np.uint8)
+    img[::] = (192, 21, 0)
+    xmid 
+    
+    
+    font_size = target.data["font_size"]
+    img = np.zeros((target.data["card_size"][0]*RATIO, target.data["card_size"][1]*RATIO, 3), np.uint8)
+    img[::] = (192, 21, 0)
+    center = (target.data["card_size"][0] // 2 * RATIO, target.data["card_size"][1] // 2 * RATIO)
+    xmid, ymid = center
+    quotient = int(target.data["quotient"]*RATIO) // 2
+    ring_thickness = int(target.data["ring_thickness"]*RATIO)
+    img = cv2.circle(img, center, 0, (255, 255, 255), int(RINGS[-1]*2*RATIO))
+    img = cv2.circle(img, center, 0, (90, 144, 21), int(RING_FRACTION[target.data["black"]]*2*RATIO))
+    if logger.level == 10:
+        img = cv2.circle(img, center, 0, (0, 0, 255), 20)
+        img = cv2.line(img, (xmid, 0), (xmid, target.data["card_size"][1]*RATIO), (0, 0, 255), 5)
+        img = cv2.line(img, (0, ymid), (target.data["card_size"][0]*RATIO, ymid), (0, 0, 255), 5)
+    for i, radius in enumerate(RINGS):
+        if 10 - i < target.data["black"]: color = (0, 0, 0)
+        else: color = (235, 235, 235)
+        img = cv2.circle(img, center, int(radius*RATIO), color, ring_thickness)
+        
+        # TODO
+        # if 10 - i <= target.data["numbers"][0] and 10 - i >= target.data["numbers"][1]:
+        #     (w, h), (we, he) = get_real_text_size(str(10-i), cv2.FONT_HERSHEY_PLAIN, font_size, font_size*2)
+        #     img = cv2.putText(img, str(10-i), (xmid - (w + we)//2, ymid - i*quotient + h + h//2 - target.data["inner_ten"]*RATIO), cv2.FONT_HERSHEY_PLAIN, font_size, color, font_size*2)
+        #     img = cv2.putText(img, str(10-i), (xmid - (w + we)//2, ymid + i*quotient - h//2 + target.data["inner_ten"]*RATIO), cv2.FONT_HERSHEY_PLAIN, font_size, color, font_size*2)
+        #     img = cv2.putText(img, str(10-i), (xmid - i*quotient + w - target.data["inner_ten"]*RATIO, ymid + (h + he)//2), cv2.FONT_HERSHEY_PLAIN, font_size, color, font_size*2)
+        #     img = cv2.putText(img, str(10-i), (xmid + i*quotient - we - w + target.data["inner_ten"], ymid + (h + he)//2), cv2.FONT_HERSHEY_PLAIN, font_size, color, font_size*2)
+        
+    for i, shot in enumerate(shots):
+        xmid = shot.x + target.data["card_size"][0]//2*RATIO if shot.x >= 0 else target.data["card_size"][0]//2*RATIO - abs(shot.x)
+        ymid = target.data["card_size"][0]//2*RATIO - shot.y if shot.y >= 0 else abs(shot.y) + target.data["card_size"][0]//2*RATIO
+        img = cv2.circle(img, (xmid, ymid), 0, (0, 0, 0), int(CALIBER*RATIO))
+        img = cv2.circle(img, (xmid, ymid), int(CALIBER*RATIO)//2, (255, 255, 255), int(target.data["ring_thickness"]*RATIO))
+        (label_width, label_height), baseline = cv2.getTextSize(str(i + 1), cv2.FONT_HERSHEY_PLAIN, font_size//1.4, int(font_size*1.2))
+        img = cv2.putText(img, str(i + 1), (xmid - label_width//2, ymid + label_height//2), cv2.FONT_HERSHEY_PLAIN, font_size//1.4, (0, 255, 255), int(font_size*1.2))
+    
+    if analyze:
+        xmid, ymid = center
+        (x_mn, y_mn, mn), (x_med, y_med, med) = mean_median_of_shots(shots)
+        print(mean_median_of_shots(shots))
+        img = cv2.circle(img, (x_mn + xmid, y_mn + ymid), mn, (255, 119, 51), 50)
+        img = cv2.circle(img, (x_med + xmid, y_med + ymid), med, (255, 0, 212), 50)
+    
+    img = cv2.resize(img, (2 ** N, 2 ** N))
+    if write:
+        cv2.imwrite(f"{datetime.datetime.now().strftime('%Y%m%d')}.jpg", img) 
+    if show:
+        cv2.namedWindow("img", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("img", 1024, 1024)
+        cv2.imshow("img", img)
+        cv2.waitKey(0)
+    
+    return img             
         
 def main(argv = None) -> None:
     logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -94,10 +159,11 @@ def main(argv = None) -> None:
     
     targets = {}
     with open("targets.json", "r", encoding="utf-8") as targets_file:
-        targets_json: dict = json.loads(targets_file.read())
+        targets_json: dict[str, Target] = json.loads(targets_file.read())
         for key, data in targets_json.items():
             targets[key] = Target(key, data)
             logger.debug(f"{key} target successfully loaded")
+            print(targets[key].int_values)
     
     shots = load_shots_from_csv("test_dataset.csv")
     print(shots[1])
@@ -231,14 +297,14 @@ def main(argv = None) -> None:
 #     with open("targets.json", "r") as targets:
 #         logger.debug(f"Selected value: {value}")
 #         targets_json: dict[str: str] = json.loads(targets.read())
-#         target_data = targets_json[value]
-#         logger.debug(f"{target_data=}")
+#         target.data = targets_json[value]
+#         logger.debug(f"{target.data=}")
     
-#     ring_fraction: dict[float: float] = {float(f"10.{10 - i - 1}"): round(((target_data["ten"] / 10 * (i + 1)) / 2), 6) for i in range(10)}
-#     ring_fraction.update({(100 - i - 1) / 10: round(((target_data["ten"] + target_data["quotient"] / 10 * (i + 1)) / 2), 6) for i in range(100)})
+#     ring_fraction: dict[float: float] = {float(f"10.{10 - i - 1}"): round(((target.data["ten"] / 10 * (i + 1)) / 2), 6) for i in range(10)}
+#     ring_fraction.update({(100 - i - 1) / 10: round(((target.data["ten"] + target.data["quotient"] / 10 * (i + 1)) / 2), 6) for i in range(100)})
 #     logger.debug(f"{ring_fraction=}")
     
-#     return ring_fraction, target_data      
+#     return ring_fraction, target.data      
         
 # def gui() -> None:
 #     raise NotImplementedError
@@ -247,7 +313,7 @@ def main(argv = None) -> None:
 
 # def cli() -> None:
     
-#     def get_target_data(*args) -> None:
+#     def get_target.data(*args) -> None:
 #         l = len(args)
 #         if l == 0:
 #             print(json.dumps(targets_json[target], indent=2))
@@ -256,7 +322,7 @@ def main(argv = None) -> None:
 #         elif l == 1:
 #             print(json.dumps(targets_json[args[0]], indent=2))
 #         elif l > 1:
-#             logger.exception("target_data only accepts only one positional argument")
+#             logger.exception("target.data only accepts only one positional argument")
         
 #     def print_help(*args) -> None:
 #         for command in commands:
@@ -270,9 +336,9 @@ def main(argv = None) -> None:
 #         elif args[0] not in targets_json.keys():
 #             logger.error(f"No target with name {args[0]} was found")
 #         else:
-#             nonlocal target, ring_fraction, target_data
+#             nonlocal target, ring_fraction, target.data
 #             target = args[0]
-#             ring_fraction, target_data = calculate_target(target)
+#             ring_fraction, target.data = calculate_target(target)
     
 #     def list_targets(*args) -> None:
 #         for key in targets_json:
@@ -311,11 +377,11 @@ def main(argv = None) -> None:
 #                     elif current_day == date:
 #                         current_shots.append(s)
 #                     else:
-#                         days.append(Day(current_shots, target_data, current_day))
+#                         days.append(Day(current_shots, target.data, current_day))
 #                         current_day = date
 #                         current_shots = [s]
                         
-#                 days.append(Day(current_shots, target_data, current_day)) # Append last day
+#                 days.append(Day(current_shots, target.data, current_day)) # Append last day
                 
             
           
@@ -327,11 +393,11 @@ def main(argv = None) -> None:
 #     ratio: int = parsed_args.ratio
 #     csv_file: str = None
     
-#     ring_fraction, target_data = (None, None) if target == None else calculate_target(target)
+#     ring_fraction, target.data = (None, None) if target == None else calculate_target(target)
 #     days: list[Day] = []
     
 #     commands = [
-#         ["target_data", "Prints out the specifications of the selected target. If no target is given, details, the currently selected", get_target_data],
+#         ["target.data", "Prints out the specifications of the selected target. If no target is given, details, the currently selected", get_target.data],
 #         ["set_target", f"Sets target. Choices: [{'; '.join(targets_json.keys())}]", set_target],
 #         ["list_targets", "Lists all available targets you can choose from", list_targets],
 #         ["read", "Reads the selected csv file and lets you use the data from it.", read_csv],
