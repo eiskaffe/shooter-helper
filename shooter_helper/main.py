@@ -27,11 +27,15 @@ class Target:
     data: dict
     values: dict[float, float] = field(init=False)
     int_values: dict[int, int] = field(init=False, repr=False)
+    image: cv2.Mat = field(init=False, repr=False)
     
     def __post_init__(self) -> None:
         self.values = {float(f"10.{10 - i - 1}"): round(((self.data["ten"] / 10 * (i + 1)) / 2), 6) for i in range(10)}
         self.values.update({(100 - i - 1) / 10: round(((self.data["ten"] + self.data["quotient"] / 10 * (i + 1)) / 2), 6) for i in range(100) if (100 - i - 1) / 10 >= 1})
         self.int_values = {int(key): value for key, value in self.values.items() if key.is_integer()}
+        if os.path.exists(f"{self.name}.png"):
+            self.image = cv2.imread(f"{self.name}.png")
+        else: self.image = draw([], self, outname=self.name)
         logger.debug(f"{self.name} target initialized with {self.values=}")
 
 @dataclass
@@ -116,43 +120,44 @@ GREEN = (112, 178, 26)
 YELLOW = (5, 238, 255)
 ALPHA = 0.85
             
-def draw(shots: list[Shot], target: Target, base_image: cv2.Mat = None, caliber: float = 4.5, ratio: int = 100) -> cv2.Mat:
+def draw(shots: list[Shot], target: Target, base_image: cv2.Mat = None, caliber: float = 4.5, ratio: int = 100, outname: str = None) -> cv2.Mat:
     """Draws the shots to a file\n
-    N is the image size in pixels: 2^N (Default: 2^12+1 = 2049)"""
-    
-    # img = np.zeros((target.data["card_size"][0]*ratio+1, target.data["card_size"][1]*ratio+1, 3), np.uint8)
-    full_shape = (target.data["card_size"][0]*ratio+1, target.data["card_size"][1]*ratio+1, 3)
-    shape = (2049, 2049, 3)
-    scale_factor = tuple(x/y for x,y in zip(shape, full_shape))
-    img = np.full(shape, BLUE, np.uint8)
-    xmid, ymid = center = (img.shape[0] // 2 + 1, img.shape[1] // 2 + 1)
-    print(center)
-    print(img.shape)
-    print(target.data["inner_ten"]*ratio)
-    
-    img = cv2.circle(img, center, 0, WHITE, int(target.int_values[1]*2*ratio))
-    img = cv2.circle(img, center, 0, GREEN, int(target.int_values[target.data["black"][1]]*2*ratio))
-    
-    if target.data["inner_ten_shown"]:
-        img = cv2.circle(img, center, int(target.data["inner_ten"]/2*ratio) - 3, WHITE, 6)
+    N is the image size in pixels: 2^N + 1"""
+
+    logger.debug(f"Started drawing!")
+
+    if base_image.any():
+        img = base_image.copy()
+        xmid, ymid = center = (img.shape[0] // 2 + 1, img.shape[1] // 2 + 1)
+    else:
+        img = np.full((target.data["card_size"][0]*ratio+1, target.data["card_size"][1]*ratio+1, 3), BLUE, np.uint8)
+        xmid, ymid = center = (img.shape[0] // 2 + 1, img.shape[1] // 2 + 1)
+        print(center)
+        print(img.shape)
+        print(target.data["inner_ten"]*ratio)
         
-    if target.data["fill_ten"]:
-        img = cv2.circle(img, center, 0, WHITE, int(target.int_values[10]*2*ratio))
-    
-    for key, value in target.int_values.items():
-        if target.data["black"][0] >= key >= target.data["black"][1]+1:
-            img = cv2.circle(img, center, int(value*ratio) - 3, WHITE, 6)
-        else: img = cv2.circle(img, center, int(value*ratio) - 3, BLACK, 6)
+        img = cv2.circle(img, center, 0, WHITE, int(target.int_values[1]*2*ratio))
+        img = cv2.circle(img, center, 0, GREEN, int(target.int_values[target.data["black"][1]]*2*ratio))
         
-        if target.data["numbers"][0] >= key >= target.data["numbers"][1]:
-            (w, h), (we, he) = get_real_text_size(str(key), cv2.FONT_HERSHEY_PLAIN, target.data["font_size"], target.data["font_thickness"])
-            color = WHITE if target.data["black"][0] >= key >= target.data["black"][1] else BLACK
-            img = cv2.putText(img, str(key), (xmid + int((target.int_values[key] + target.int_values[key+1])*ratio) // 2 - we - w//2, ymid - he + h//2), cv2.FONT_HERSHEY_PLAIN, target.data["font_size"], color, target.data["font_thickness"])
-            img = cv2.putText(img, str(key), (xmid - int((target.int_values[key] + target.int_values[key+1])*ratio) // 2 - we - w + w//2, ymid - he + h//2), cv2.FONT_HERSHEY_PLAIN, target.data["font_size"], color, target.data["font_thickness"])
-            img = cv2.putText(img, str(key), (xmid - we - w//2, ymid - he - int((target.int_values[key] + target.int_values[key+1])*ratio) // 2 + h//2), cv2.FONT_HERSHEY_PLAIN, target.data["font_size"], color, target.data["font_thickness"])
-            img = cv2.putText(img, str(key), (xmid - we - w//2, ymid - he + h + int((target.int_values[key] + target.int_values[key+1])*ratio) // 2 - h//2), cv2.FONT_HERSHEY_PLAIN, target.data["font_size"], color, target.data["font_thickness"])
+        if target.data["inner_ten_shown"]:
+            img = cv2.circle(img, center, int(target.data["inner_ten"]/2*ratio) - 3, WHITE, 6)
+            
+        if target.data["fill_ten"]:
+            img = cv2.circle(img, center, 0, WHITE, int(target.int_values[10]*2*ratio))
+        
+        for key, value in target.int_values.items():
+            if target.data["black"][0] >= key >= target.data["black"][1]+1:
+                img = cv2.circle(img, center, int(value*ratio) - 3, WHITE, 6)
+            else: img = cv2.circle(img, center, int(value*ratio) - 3, BLACK, 6)
+            
+            if target.data["numbers"][0] >= key >= target.data["numbers"][1]:
+                (w, h), (we, he) = get_real_text_size(str(key), cv2.FONT_HERSHEY_PLAIN, target.data["font_size"], target.data["font_thickness"])
+                color = WHITE if target.data["black"][0] >= key >= target.data["black"][1] else BLACK
+                img = cv2.putText(img, str(key), (xmid + int((target.int_values[key] + target.int_values[key+1])*ratio) // 2 - we - w//2, ymid - he + h//2), cv2.FONT_HERSHEY_PLAIN, target.data["font_size"], color, target.data["font_thickness"])
+                img = cv2.putText(img, str(key), (xmid - int((target.int_values[key] + target.int_values[key+1])*ratio) // 2 - we - w + w//2, ymid - he + h//2), cv2.FONT_HERSHEY_PLAIN, target.data["font_size"], color, target.data["font_thickness"])
+                img = cv2.putText(img, str(key), (xmid - we - w//2, ymid - he - int((target.int_values[key] + target.int_values[key+1])*ratio) // 2 + h//2), cv2.FONT_HERSHEY_PLAIN, target.data["font_size"], color, target.data["font_thickness"])
+                img = cv2.putText(img, str(key), (xmid - we - w//2, ymid - he + h + int((target.int_values[key] + target.int_values[key+1])*ratio) // 2 - h//2), cv2.FONT_HERSHEY_PLAIN, target.data["font_size"], color, target.data["font_thickness"])
     
-    # caliber /= 2
     for shot in shots:
         overlay = img.copy()
         size, thickness = 13, 13
@@ -164,23 +169,36 @@ def draw(shots: list[Shot], target: Target, base_image: cv2.Mat = None, caliber:
         
         img = cv2.addWeighted(overlay, ALPHA, img, 1 - ALPHA, 0)
     
-    img = cv2.line(img, (xmid, 0), (xmid, target.data["card_size"][1]*ratio+1), (0, 0, 255), 1)
-    img = cv2.line(img, (0, ymid), (target.data["card_size"][0]*ratio+1, ymid), (0, 0, 255), 1)
+    if logger.level == logging.DEBUG:
+        cv2.namedWindow("img", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("img", 1024, 1024)
+        deb = cv2.line(img, (xmid, 0), (xmid, target.data["card_size"][1]*ratio+1), (0, 0, 255), 1)
+        deb = cv2.line(deb, (0, ymid), (target.data["card_size"][0]*ratio+1, ymid), (0, 0, 255), 1)
+        cv2.imshow("img", deb)
+        cv2.waitKey(0)
 
-    out = np.zeros((2049, 2049, 3))
-    out = cv2.resize(img, dsize=(2049, 2049), interpolation=cv2.INTER_LANCZOS4)
-
-    cv2.imwrite(datetime.datetime.now().strftime('%Y-%m-%d-%H%M%S%f')[:-3] + ".png", img)
-    print("Writing DONE!")
+    logger.debug("Drawing DONE!")
+    if outname == "":
+        cv2.imwrite(datetime.datetime.now().strftime('%Y-%m-%d-%H%M%S%f')[:-3] + ".png", img)
+        logger.debug("Writing DONE!")
+    elif outname != None:
+        cv2.imwrite(f"{outname}.png", img)
+        logger.debug("Writing DONE!")
     
     return img             
         
+def cutImage(img: cv2.Mat, x: int, xmid: int = -1, ymid: int = -1) -> cv2.Mat:
+    logger.debug("Cutting image")
+    if xmid == -1 or ymid == -1:
+        xmid, ymid = (img.shape[0] // 2 + 1, img.shape[1] // 2 + 1)
+    return img[ymid-x:ymid+x,xmid-x:xmid+x]
+    
 def main(argv = None) -> None:
     logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
     global logger
     logger = logging.getLogger(__name__)
     
-    targets = {}
+    targets: dict[str, Target] = {}
     with open("targets.json", "r", encoding="utf-8") as targets_file:
         targets_json: dict[str, Target] = json.loads(targets_file.read())
         for key, data in targets_json.items():
@@ -191,7 +209,9 @@ def main(argv = None) -> None:
     shots = load_shots_from_csv("test_dataset.csv")
     print(shots[1])
     
-    draw(shots, targets["10m_AR_ISSF"])
+    img = draw(shots, targets["10m_AR_ISSF"], targets["10m_AR_ISSF"].image, outname="")
+    maximum = max(shots, key=lambda s: s.hypotenuse)
+    cv2.imwrite("asd.png", cutImage(img, int(maximum.hypotenuse*1.3)))
 
 # def get_value(hypotenuse: int, ratio, ring_fraction) -> List[int | None]:
 #     """Returns the value of a shot given by the shot's hypotenuse and its target's ring_fraction"""
