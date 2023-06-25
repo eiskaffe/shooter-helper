@@ -6,23 +6,27 @@
         "inner_ten_shown": true,
         "inner_ten_measuring_ring": 9,
         "inner_ten_measuring_edge": 18,
-        "black": 7,
+        "fill_ten": false,
+        "black": [10, 7],
         "ring_thickness": 0.1,
-        "numbers": [10, 1],
+        "numbers": [9, 1],
         "card_size": [170, 170],
-        "font_size": 25
+        "font_size": 30,
+        "font_thickness": 30
     },
     "10m_AR_ISSF": {
         "ten": 0.5,
         "quotient": 5,
         "inner_ten": 0,
-        "inner_ten_shown": true,
+        "inner_ten_shown": false,
         "inner_ten_measuring_ring": 0,
         "inner_ten_measuring_edge": 0,
-        "black": 4,
+        "fill_ten": true,
+        "black": [10, 4],
         "ring_thickness": 0.1,
-        "numbers": [10, 1],
+        "numbers": [8, 1],
         "card_size": [170, 170],
-        "font_size": 8
+        "font_size": 11,
+        "font_thickness": 11
     }
 }

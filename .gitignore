@@ -5,6 +5,7 @@ test*.py
 # development
 venv
 *.log
+shooter_helper/*.png
 
 # other
 __pycache__
